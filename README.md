@@ -26,47 +26,110 @@
 ```bash
 python chem_equilibrium.py
 
-操作流程
-啟動程式後，選擇欲計算的化學平衡系統（目前為弱酸解離）。
-輸入初始酸濃度 c₀（mol/L）。
-輸入酸解離常數 Ka。
-程式將輸出：
-平衡時 [HA]、[A⁻]、[H⁺]
-溶液 pH 值
+from dataclasses import dataclass
+import math
 
-程式的架構
-專案程式採用模組化與物件導向設計，使未來新增其他化學平衡模型（如溶解平衡、酸鹼水解）更為容易。
-├─ chem_equilibrium.py      # 主程式，提供選單與使用者介面
-├─ src/
-│  ├─ weak_acid.py          # 弱酸解離平衡模型與計算方法
-│  └─ utils.py              # 輔助函式（檢查輸入、格式化輸出）
-├─ docs/
-│  ├─ dev_log.md            # 開發過程紀錄
-│ 
-└─ README.md
 
-4. 開發過程
-題目發想
-本專題希望將化學平衡中抽象的數學推導轉化為可實際操作的計算工具，讓使用者能快速觀察不同參數對平衡結果的影響。
-功能規劃
-初期先選擇弱酸解離系統，建立最基本的平衡模型與 pH 計算功能，再視時間與進度評估是否加入進階平衡模型。
-程式實作
-先完成平衡方程的數學推導
-將方程轉換為可程式化的二次方程
-加入物理解判斷與輸入檢查，避免不合理結果
-測試與修正
-使用常見弱酸參數（如 Ka ≈ 10⁻⁵）進行測試，確認計算結果與理論值相符。
+@dataclass
+class WeakAcidSystem:
+    """
+    弱酸解離系統：
+    HA ⇌ H+ + A-
 
-5. 參考資料來源
-課堂講義與上課筆記
-普通化學教科書中「化學平衡與弱酸解離」章節
-Python 官方文件：https://docs.python.org
-Matplotlib 官方文件（若有使用）：https://matplotlib.org
+    參數：
+    - c0: 初始 HA 濃度 (mol/L)
+    - Ka: 酸解離常數
+    """
+    c0: float   # 初始 HA 濃度
+    Ka: float   # 酸解離常數
 
-6. 程式修改或增強的內容
-本專案並未直接複製網路或 GitHub 上的完整程式碼，而是自行建立化學平衡模型與計算流程。
-在開發過程中所做的主要改動與增強包括：
-將化學平衡方程轉為二次方程並自行實作求解流程
-加入物理解篩選機制，確保解的合理性
-設計模組化架構，方便未來新增其他化學平衡系統
-增加輸入錯誤檢查，提高程式穩定性
+    def solve_equilibrium(self):
+        """
+        利用精確二次方程式解：
+        Ka = x^2 / (c0 - x)
+        => Ka(c0 - x) = x^2
+        => Ka*c0 - Ka*x - x^2 = 0
+        => x^2 + Ka*x - Ka*c0 = 0
+        """
+        a = 1.0
+        b = self.Ka
+        c = - self.Ka * self.c0
+
+        disc = b * b - 4 * a * c
+        if disc < 0:
+            raise ValueError("無實數解，請檢查輸入參數。")
+
+        x1 = (-b + math.sqrt(disc)) / (2 * a)
+        x2 = (-b - math.sqrt(disc)) / (2 * a)
+
+        # 物理解要求：0 ≤ x ≤ c0
+        candidates = [x for x in (x1, x2) if 0 <= x <= self.c0]
+        if not candidates:
+            raise ValueError("沒有物理上合理的解，請檢查濃度與 Ka。")
+
+        x = max(candidates)  # 通常較大的那個根是合理解
+
+        h_conc = x          # [H+]
+        a_minus = x         # [A-]
+        ha = self.c0 - x    # [HA]
+
+        return {
+            "[H+]": h_conc,
+            "[A-]": a_minus,
+            "[HA]": ha,
+            "pH": -math.log10(h_conc)
+        }
+
+
+def run_weak_acid_mode():
+    print("=== 弱酸解離平衡計算器 (HA ⇌ H+ + A-) ===")
+    try:
+        c0 = float(input("請輸入初始酸濃度 c0 (mol/L): "))
+        Ka = float(input("請輸入酸解離常數 Ka: "))
+    except ValueError:
+        print("輸入格式錯誤，請輸入數字。")
+        return
+
+    if c0 <= 0 or Ka <= 0:
+        print("c0 與 Ka 必須為正數。")
+        return
+
+    system = WeakAcidSystem(c0=c0, Ka=Ka)
+    try:
+        result = system.solve_equilibrium()
+    except ValueError as e:
+        print("計算失敗：", e)
+        return
+
+    print("\n--- 計算結果 ---")
+    print(f"[HA]  = {result['[HA]']:.6e} mol/L")
+    print(f"[A-]  = {result['[A-]']:.6e} mol/L")
+    print(f"[H+]  = {result['[H+]']:.6e} mol/L")
+    print(f"pH    = {result['pH']:.3f}")
+    print("----------------\n")
+
+
+def main():
+    while True:
+        print("===== 化學平衡計算器 =====")
+        print("1) 弱酸解離平衡 (HA ⇌ H+ + A-)")
+        # 未來可以在這裡加：
+        # 2) 多元酸平衡
+        # 3) 鹽類水解
+        # 4) 溶解度積 Ksp 平衡
+        print("0) 離開")
+        choice = input("請選擇功能編號: ").strip()
+
+        if choice == "1":
+            run_weak_acid_mode()
+        elif choice == "0":
+            print("感謝使用，掰掰～")
+            break
+        else:
+            print("無效選項，請重新輸入。\n")
+
+
+if __name__ == "__main__":
+    main()
+
+
